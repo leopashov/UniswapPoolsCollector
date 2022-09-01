@@ -40,14 +40,18 @@ def getV3PoolData(V3Pools, w3, ETHERSCAN_TOKEN, cur, cg):
         poolABI = getABI(V3Pool, ETHERSCAN_TOKEN)
         print(f"pool address: ", V3Pool)
         # print(f"Pool ABI: ", poolABI)
+        poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
         try:
             poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
         except ValueError:
+            # value error raised when contract source not verified on etherscan
             break
         TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
         print(TOKEN)
         RESERVE = getReserve(TOKEN, V3Pool, ETHERSCAN_TOKEN, w3)
         print(f"RESERVE: ", RESERVE)
+        TOKEN0_by_TOKEN1 = 1/ (RESERVE[0] / RESERVE[1])
+
 
 def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
     """call token addresses 'balanceOf' function with pool address to show
@@ -112,7 +116,6 @@ def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     poolInstance = w3.eth.contract(address = poolAddress, abi = poolABI)
     # call pool instance to get data
     TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
-    PRICE = (poolInstance.functions.price0CumulativeLast.__call__().call(), poolInstance.functions.price1CumulativeLast.__call__().call())
     RAW_RESERVES = poolInstance.functions.getReserves.__call__().call()
     RESERVE = (float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[0]), "ether"))), float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[1]), "ether"))))
     TOKEN0_by_TOKEN1 = 1/ (RESERVE[0] / RESERVE[1])
