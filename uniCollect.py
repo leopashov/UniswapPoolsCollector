@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from web3 import Web3
+from web3 import Web3, exceptions
 import requests
 import pandas as pd
 import numpy as np
@@ -23,28 +23,92 @@ def main():
     token0 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
     token1 = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
 
-    getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur, cg)
+    getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
 
 
 
-def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur, cg):
-    V2PairAddress = getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
-    print(f"V2 pair address: ", V2PairAddress)
-    getPoolData(V2PairAddress, w3, ETHERSCAN_TOKEN, cur, cg)
+def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
+    V2Pools = getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
+    V3Pools = getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
+
+    getV2PoolData(V2Pools, w3, ETHERSCAN_TOKEN, cur, cg)
+    getV3PoolData(V3Pools, w3, ETHERSCAN_TOKEN, cur, cg)
+
+def getV3PoolData(V3Pools, w3, ETHERSCAN_TOKEN, cur, cg):
+    for V3Pool in V3Pools:
+        poolABI = getABI(V3Pool, ETHERSCAN_TOKEN)
+        print(f"pool address: ", V3Pool)
+        # print(f"Pool ABI: ", poolABI)
+        try:
+            poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
+        except ValueError:
+            break
+        TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
+        print(TOKEN)
+        RESERVE = getReserve(TOKEN, V3Pool, ETHERSCAN_TOKEN, w3)
+        print(f"RESERVE: ", RESERVE)
+
+def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
+    """call token addresses 'balanceOf' function with pool address to show
+    how many tokens of each type in pool
+    will include unclaiemd tokens despite them not adding to liquidity
+    but gas is low at the moment so maybe rate of claiming is higher"""
+    RESERVE = []
+    for token in TOKEN:
+        implementation_contract = getImplementationContract(token, w3)
+        print(f"token: ", token)
+        print(f"implementation contract: ", implementation_contract)
+        if int(implementation_contract, 16) != 0:
+            # token address is a proxy contract, use implementation address for ABI 
+            tokenABI = getABI(implementation_contract, ETHERSCAN_TOKEN)
+        else:
+            tokenABI = getABI(token, ETHERSCAN_TOKEN)
+        print(tokenABI)
+        # use address and abi to call balance of function
+        poolInstance = w3.eth.contract(address = token, abi = tokenABI)
+        try:
+            RESERVE.append(poolInstance.functions.balanceOf(poolAddress).__call__().call())
+        except exceptions.ABIFunctionNotFound:
+            RESERVE.append(0)
+            print(f"Token uses non-EIP proxy: ", token)
+        except TypeError:
+            RESERVE.append(0)
+            print(f"Token uses non-EIP proxy: ", token)
+    return RESERVE
+
+def getImplementationContract(proxyAddress, w3):
+    """reads proxy contract with address 'proxyAddress's storage at specific slot as defined in EIP 1967
+    to obtain the implementation contract address."""
+    impl_contract = Web3.toHex(
+        w3.eth.get_storage_at(
+            proxyAddress,
+            "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+        )
+    )
+    return impl_contract
 
 
 def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
     # 0.3% => 3000
     bips = [100, 500, 3000, 10000]
+    poolAddresses = []
     V3_ABI = getABI(UNI_FACTORY_V3, ETHERSCAN_TOKEN)
+    contract_instance = w3.eth.contract(address = UNI_FACTORY_V3, abi = V3_ABI)
     for fee in bips:
-        pass
+        poolAddress = contract_instance.functions.getPool(token0, token1, fee).call()
+        # print(type(poolAddress))
+        if int(poolAddress, 16) != 0:
+            poolAddresses.append(poolAddress)
+    return poolAddresses
+        
         
 
-def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
+def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     # get ABI
     poolABI = getABI(poolAddress, ETHERSCAN_TOKEN)
+    print(f"pool address: ", poolAddress)
+    # print(f"Pool ABI: ", poolABI)
     poolInstance = w3.eth.contract(address = poolAddress, abi = poolABI)
     # call pool instance to get data
     TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
