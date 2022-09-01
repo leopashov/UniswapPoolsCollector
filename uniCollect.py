@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from web3 import Web3, exceptions
 import requests
 import pandas as pd
-import numpy as np
 import sqlite3
 from pycoingecko import CoinGeckoAPI
 
@@ -26,10 +25,24 @@ def main():
     getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
 
-    writeToCSV()
+    writeToCSV(cur)
 
-def writeToCSV():
-    pass
+def writeToCSV(cur):
+    f = open('./output.csv', 'w')
+    # Execute the query
+    cur.execute('select * from pools')
+    # Get Header Names (without tuples)
+    colnames = [desc[0] for desc in cur.description]
+    # Get data in batches
+    while True:
+        # Read the data
+        df = pd.DataFrame(cur.fetchall())
+        # We are done if there are no data
+        if len(df) == 0:
+            break
+        # Let us write to the file
+        else:
+            df.to_csv(f, header=colnames)
 
 
 def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
