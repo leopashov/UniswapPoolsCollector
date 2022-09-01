@@ -20,8 +20,8 @@ def main():
     cur = con.cursor()
     cur.execute("DELETE FROM pools")
     cg = CoinGeckoAPI()
-    token0 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
-    token1 = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
+    token0 = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
+    token1 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 
     getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
@@ -30,14 +30,18 @@ def main():
 
 def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
     V2Pools = getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
-    V3Pools = getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
+    (V3Pools, bips) = getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
 
     getV2PoolData(V2Pools, w3, ETHERSCAN_TOKEN, cur, cg)
-    getV3PoolData(V3Pools, w3, ETHERSCAN_TOKEN, cur, cg)
+    getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg)
 
-def getV3PoolData(V3Pools, w3, ETHERSCAN_TOKEN, cur, cg):
+def getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg):
+    etherscan_verified_ABI_address = '0x8f8EF111B67C04Eb1641f5ff19EE54Cda062f163'
+    # use hardcoded address which etherscan seems to point to as the 
+    # verified version of later v3 pool implementations
+    poolABI = getABI(etherscan_verified_ABI_address, ETHERSCAN_TOKEN)
+    count = 0
     for V3Pool in V3Pools:
-        poolABI = getABI(V3Pool, ETHERSCAN_TOKEN)
         print(f"pool address: ", V3Pool)
         # print(f"Pool ABI: ", poolABI)
         poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
@@ -50,8 +54,14 @@ def getV3PoolData(V3Pools, w3, ETHERSCAN_TOKEN, cur, cg):
         print(TOKEN)
         RESERVE = getReserve(TOKEN, V3Pool, ETHERSCAN_TOKEN, w3)
         print(f"RESERVE: ", RESERVE)
-        TOKEN0_by_TOKEN1 = 1/ (RESERVE[0] / RESERVE[1])
-
+        try:
+            TOKEN0_by_TOKEN1 = RESERVE[1] / RESERVE[0]
+        except ZeroDivisionError:
+            TOKEN0_by_TOKEN1 = 0
+        PRICE = getTokenPrice(cg, [TOKEN[0], TOKEN[1]])
+        TVL = (PRICE[0] * RESERVE[0], PRICE[1] * RESERVE[1])
+        cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, fee_tier, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (V3Pool, 3, TOKEN[0], TOKEN[1], bips[count], RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
+        count += 1
 
 def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
     """call token addresses 'balanceOf' function with pool address to show
@@ -97,14 +107,16 @@ def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur,
     # 0.3% => 3000
     bips = [100, 500, 3000, 10000]
     poolAddresses = []
+    poolBips = []
     V3_ABI = getABI(UNI_FACTORY_V3, ETHERSCAN_TOKEN)
     contract_instance = w3.eth.contract(address = UNI_FACTORY_V3, abi = V3_ABI)
     for fee in bips:
         poolAddress = contract_instance.functions.getPool(token0, token1, fee).call()
-        # print(type(poolAddress))
+        # getPool returns null address if no pool found
         if int(poolAddress, 16) != 0:
             poolAddresses.append(poolAddress)
-    return poolAddresses
+            poolBips.append(fee)
+    return (poolAddresses, poolBips) 
         
         
 
@@ -117,13 +129,32 @@ def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     # call pool instance to get data
     TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
     RAW_RESERVES = poolInstance.functions.getReserves.__call__().call()
-    RESERVE = (float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[0]), "ether"))), float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[1]), "ether"))))
-    TOKEN0_by_TOKEN1 = 1/ (RESERVE[0] / RESERVE[1])
+    # customise for decimals!:
+    RESERVE = (normalise_decimals(TOKEN[0], int(RAW_RESERVES[0]), w3, ETHERSCAN_TOKEN), normalise_decimals(TOKEN[1], int(RAW_RESERVES[1]), w3, ETHERSCAN_TOKEN))
+    TOKEN0_by_TOKEN1 = (RESERVE[1] / RESERVE[0])
     PRICE = getTokenPrice(cg, [TOKEN[0], TOKEN[1]])
     TVL = (PRICE[0] * RESERVE[0], PRICE[1] * RESERVE[1])
 
     cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (poolAddress, 2, TOKEN[0], TOKEN[1], RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
     
+def normalise_decimals(token_address, value, w3, etherscanToken):
+    implementationContract = getImplementationContract(token_address, w3)
+    if int(implementationContract, 16) != 0:
+        ABI = getABI(implementationContract, etherscanToken)
+        address = implementationContract
+    else:
+        ABI = getABI(token_address, etherscanToken)
+        address = token_address
+    decimals = getDecimals(address, ABI, w3)
+    value = value * pow(10,-decimals)
+    value = float("{:.3f}".format(value))
+    return value
+
+def getDecimals(address, ABI, w3):
+    contract_instance = w3.eth.contract(address = address, abi = ABI)
+    decimals = contract_instance.functions.decimals.__call__().call()
+    return decimals
+
 
 def getTokenPrice(cg, contractAddress):
     prices = []
