@@ -59,18 +59,15 @@ def getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg):
     poolABI = getABI(etherscan_verified_ABI_address, ETHERSCAN_TOKEN)
     count = 0
     for V3Pool in V3Pools:
-        print(f"pool address: ", V3Pool)
         poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
         try:
             TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
         except ValueError:
             # value error raised when contract source not verified on etherscan
             break
-        print(TOKEN)
         RESERVE = getReserve(TOKEN, V3Pool, ETHERSCAN_TOKEN, w3)
         RESERVE[0] = normalise_decimals(TOKEN[0], RESERVE[0], w3, ETHERSCAN_TOKEN)
         RESERVE[1] = normalise_decimals(TOKEN[1], RESERVE[1], w3, ETHERSCAN_TOKEN)
-        print(f"RESERVE: ", RESERVE)
         try:
             TOKEN0_by_TOKEN1 = RESERVE[1] / RESERVE[0]
         except ZeroDivisionError:
@@ -88,20 +85,15 @@ def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
     RESERVE = []
     for token in TOKEN:
         implementation_contract = getImplementationContract(token, w3)
-        print(f"token: ", token)
-        print(f"implementation contract: ", implementation_contract)
         if int(implementation_contract, 16) != 0:
             # token address is a proxy contract, use implementation address for ABI 
             tokenABI = getABI(implementation_contract, ETHERSCAN_TOKEN)
         else:
             tokenABI = getABI(token, ETHERSCAN_TOKEN)
-        print(f"token abi: ", tokenABI)
         # use address and abi to call balance of function
         poolInstance = w3.eth.contract(address = token, abi = tokenABI)
-        # call = poolInstance.functions.balanceOf(poolAddress).call()
         try:
             call = poolInstance.functions.balanceOf(poolAddress).call()
-            print(f"CALL:", call)
             RESERVE.append(call)
         except exceptions.ABIFunctionNotFound:
             RESERVE.append(0)
@@ -124,7 +116,6 @@ def getImplementationContract(proxyAddress, w3):
 
 
 def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
-    # 0.3% => 3000
     bips = [100, 500, 3000, 10000]
     poolAddresses = []
     poolBips = []
@@ -143,7 +134,7 @@ def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur,
 def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     # get ABI
     poolABI = getABI(poolAddress, ETHERSCAN_TOKEN)
-    print(f"pool address: ", poolAddress)
+    # print(f"pool address: ", poolAddress)
     poolInstance = w3.eth.contract(address = poolAddress, abi = poolABI)
     # call pool instance to get data
     TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
@@ -154,7 +145,7 @@ def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     PRICE = getTokenPrice(cg, [TOKEN[0], TOKEN[1]])
     TVL = (PRICE[0] * RESERVE[0], PRICE[1] * RESERVE[1])
 
-    cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (poolAddress, 2, TOKEN[0], TOKEN[1], RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
+    cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, fee_tier, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (poolAddress, 2, TOKEN[0], TOKEN[1], 3000, RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
     
 def normalise_decimals(token_address, value, w3, etherscanToken):
     implementationContract = getImplementationContract(token_address, w3)
@@ -204,7 +195,6 @@ def getABI(address, etherscanToken):
 def init_connection():
     provider_url = "https://mainnet.infura.io/v3/d758f6f480b64b8daf47412f0969392b"
     w3 = Web3(Web3.HTTPProvider(provider_url))
-    print(f"connection active? ", w3.isConnected())
     return w3
 
 if __name__ == '__main__':
