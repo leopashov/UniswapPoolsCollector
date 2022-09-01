@@ -26,6 +26,10 @@ def main():
     getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
 
+    writeToCSV()
+
+def writeToCSV():
+    pass
 
 
 def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
@@ -43,16 +47,16 @@ def getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg):
     count = 0
     for V3Pool in V3Pools:
         print(f"pool address: ", V3Pool)
-        # print(f"Pool ABI: ", poolABI)
         poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
         try:
-            poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
+            TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
         except ValueError:
             # value error raised when contract source not verified on etherscan
             break
-        TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
         print(TOKEN)
         RESERVE = getReserve(TOKEN, V3Pool, ETHERSCAN_TOKEN, w3)
+        RESERVE[0] = normalise_decimals(TOKEN[0], RESERVE[0], w3, ETHERSCAN_TOKEN)
+        RESERVE[1] = normalise_decimals(TOKEN[1], RESERVE[1], w3, ETHERSCAN_TOKEN)
         print(f"RESERVE: ", RESERVE)
         try:
             TOKEN0_by_TOKEN1 = RESERVE[1] / RESERVE[0]
@@ -78,11 +82,14 @@ def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
             tokenABI = getABI(implementation_contract, ETHERSCAN_TOKEN)
         else:
             tokenABI = getABI(token, ETHERSCAN_TOKEN)
-        print(tokenABI)
+        print(f"token abi: ", tokenABI)
         # use address and abi to call balance of function
         poolInstance = w3.eth.contract(address = token, abi = tokenABI)
+        # call = poolInstance.functions.balanceOf(poolAddress).call()
         try:
-            RESERVE.append(poolInstance.functions.balanceOf(poolAddress).__call__().call())
+            call = poolInstance.functions.balanceOf(poolAddress).call()
+            print(f"CALL:", call)
+            RESERVE.append(call)
         except exceptions.ABIFunctionNotFound:
             RESERVE.append(0)
             print(f"Token uses non-EIP proxy: ", token)
@@ -124,7 +131,6 @@ def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     # get ABI
     poolABI = getABI(poolAddress, ETHERSCAN_TOKEN)
     print(f"pool address: ", poolAddress)
-    # print(f"Pool ABI: ", poolABI)
     poolInstance = w3.eth.contract(address = poolAddress, abi = poolABI)
     # call pool instance to get data
     TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
