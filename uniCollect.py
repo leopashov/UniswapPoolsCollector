@@ -23,15 +23,15 @@ def main():
     token1 = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
 
     print(ETHERSCAN_TOKEN)
-    getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur)
+    getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
 
 
 
-def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur):
+def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur, cg):
     V2PairAddress = getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
     print(f"V2 pair address: ", V2PairAddress)
-    getPoolData(V2PairAddress, w3, ETHERSCAN_TOKEN, cur)
+    getPoolData(V2PairAddress, w3, ETHERSCAN_TOKEN, cur, cg)
 
 
 
@@ -40,21 +40,18 @@ def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     poolABI = getABI(poolAddress, ETHERSCAN_TOKEN)
     poolInstance = w3.eth.contract(address = poolAddress, abi = poolABI)
     # call pool instance to get data
-    TOKEN0 = poolInstance.functions.token0.__call__().call()
-    TOKEN1 = poolInstance.functions.token1.__call__().call()
-    PRICE0 = poolInstance.functions.price0CumulativeLast.__call__().call()
-    PRICE1 = poolInstance.functions.price1CumulativeLast.__call__().call()
-    RESERVES = poolInstance.functions.getReserves.__call__().call()
-    RESERVE0 = "{:.3f}".format(Web3.fromWei(int(RESERVES[0]), "ether"))
-    RESERVE1 = "{:.3f}".format(Web3.fromWei(int(RESERVES[1]), "ether"))
-    TOKEN0_by_TOKEN1 = RESERVE0 / RESERVE1
-    PRICE0 = getTokenPrice(cg, TOKEN0)
-    PRICE1 = getTokenPrice(cg, TOKEN1)
+    TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
+    PRICE = (poolInstance.functions.price0CumulativeLast.__call__().call(), poolInstance.functions.price1CumulativeLast.__call__().call())
+    RAW_RESERVES = poolInstance.functions.getReserves.__call__().call()
+    RESERVE = (float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[0]), "ether"))), float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[1]), "ether"))))
+    TOKEN0_by_TOKEN1 = RESERVE[0] / RESERVE[1]
+    PRICE = (getTokenPrice(cg, TOKEN[0]), getTokenPrice(cg, TOKEN[1]))
+    TVL = (PRICE[0] * RESERVE[0], PRICE[1] * RESERVE[1])
 
     # cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount) VALUES (?, ?, ?, ?, ?, ?)", (poolAddress, 2, str(TOKEN0), str(TOKEN1), RESERVE0, RESERVE1))
-    print("reserve0: ", RESERVE0)
-    print("reserve1: ", RESERVE1)
-    cur.execute("INSERT INTO pools (pool_address, token0_address, token1_address, token0_amount, token1_amount) VALUES (?, ?, ?, ?, ?)", (poolAddress, TOKEN0, TOKEN1, RESERVE0, RESERVE1))
+    print("reserve0: ", RESERVE[0])
+    print("reserve1: ", RESERVE[1])
+    cur.execute("INSERT INTO pools (pool_address, token0_address, token1_address, token0_amount, token1_amount, TVL_token0, TVL_token1) VALUES (?, ?, ?, ?, ?, ?, ?)", (poolAddress, TOKEN[0], TOKEN[1], RESERVE[0], RESERVE[1], TVL[0], TVL[1]))
     
 
 def getTokenPrice(cg, contractAddress):
