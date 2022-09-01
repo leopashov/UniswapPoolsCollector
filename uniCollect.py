@@ -14,6 +14,7 @@ def main():
     load_dotenv()
     ETHERSCAN_TOKEN = os.getenv('ETHERSCAN_TOKEN')
     UNI_FACTORY_V2 = os.getenv('UNI_FACTORY_V2')
+    UNI_FACTORY_V3 = os.getenv('UNI_FACTORY_V3')
     w3 = init_connection()
     con = sqlite3.connect("./collection.db")
     cur = con.cursor()
@@ -22,7 +23,6 @@ def main():
     token0 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
     token1 = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
 
-    print(ETHERSCAN_TOKEN)
     getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
 
@@ -34,6 +34,13 @@ def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur, cg)
     getPoolData(V2PairAddress, w3, ETHERSCAN_TOKEN, cur, cg)
 
 
+def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
+    # 0.3% => 3000
+    bips = [100, 500, 3000, 10000]
+    V3_ABI = getABI(UNI_FACTORY_V3, ETHERSCAN_TOKEN)
+    for fee in bips:
+        pass
+        
 
 def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     # get ABI
@@ -44,21 +51,19 @@ def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     PRICE = (poolInstance.functions.price0CumulativeLast.__call__().call(), poolInstance.functions.price1CumulativeLast.__call__().call())
     RAW_RESERVES = poolInstance.functions.getReserves.__call__().call()
     RESERVE = (float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[0]), "ether"))), float("{:.3f}".format(Web3.fromWei(int(RAW_RESERVES[1]), "ether"))))
-    TOKEN0_by_TOKEN1 = RESERVE[0] / RESERVE[1]
-    PRICE = (getTokenPrice(cg, TOKEN[0]), getTokenPrice(cg, TOKEN[1]))
+    TOKEN0_by_TOKEN1 = 1/ (RESERVE[0] / RESERVE[1])
+    PRICE = getTokenPrice(cg, [TOKEN[0], TOKEN[1]])
     TVL = (PRICE[0] * RESERVE[0], PRICE[1] * RESERVE[1])
 
-    # cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount) VALUES (?, ?, ?, ?, ?, ?)", (poolAddress, 2, str(TOKEN0), str(TOKEN1), RESERVE0, RESERVE1))
-    print("reserve0: ", RESERVE[0])
-    print("reserve1: ", RESERVE[1])
     cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (poolAddress, 2, TOKEN[0], TOKEN[1], RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
     
 
 def getTokenPrice(cg, contractAddress):
+    prices = []
     coinsList = cg.get_token_price(id = 'ethereum',contract_addresses = contractAddress, vs_currencies = 'usd')
     for key in coinsList.keys():
-        price = coinsList[key]["usd"]
-    return price
+        prices.append(coinsList[key]["usd"])
+    return prices
 
 
 def getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN):
