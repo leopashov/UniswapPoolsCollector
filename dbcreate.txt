@@ -1,0 +1,1 @@
+CREATE TABLE pools (pool_address TEXT PRIMARY KEY, uni_V_no INTEGER, token0_address TEXT, token1_address TEXT, fee_tier INTEGER, token0_amount FLOAT, token1_amount FLOAT, TVL_token0 FLOAT, TVL_token1 FLOAT, Token0_by_Token1 FLOAT, token0_usd_price FLOAT, token1usd_price FLOAT); 

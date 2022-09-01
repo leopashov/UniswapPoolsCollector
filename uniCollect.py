@@ -2,6 +2,9 @@ import os
 from dotenv import load_dotenv
 from web3 import Web3
 import requests
+import pandas as pd
+import numpy as np
+import sqlite3
 
 
 
@@ -10,33 +13,43 @@ def main():
     ETHERSCAN_TOKEN = os.getenv('ETHERSCAN_TOKEN')
     UNI_FACTORY_V2 = os.getenv('UNI_FACTORY_V2')
     w3 = init_connection()
+    con = sqlite3.connect("./collection.db")
+    cur = con.cursor()
+    cur.execute("DELETE FROM pools")
     token0 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
     token1 = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
+
     print(ETHERSCAN_TOKEN)
-    getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
+    getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur)
+    con.commit()
 
 
 
-def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN):
+def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN, cur):
     V2PairAddress = getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
     print(f"V2 pair address: ", V2PairAddress)
-    getPoolData(V2PairAddress, w3, ETHERSCAN_TOKEN)
+    getPoolData(V2PairAddress, w3, ETHERSCAN_TOKEN, cur)
 
 
 
-def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN):
+def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur):
     # get ABI
     poolABI = getABI(poolAddress, ETHERSCAN_TOKEN)
     poolInstance = w3.eth.contract(address = poolAddress, abi = poolABI)
     # call pool instance to get data
+    list = []
     TOKEN0 = poolInstance.functions.token0.__call__().call()
     TOKEN1 = poolInstance.functions.token1.__call__().call()
     PRICE0 = poolInstance.functions.price0CumulativeLast.__call__().call()
     PRICE1 = poolInstance.functions.price1CumulativeLast.__call__().call()
     RESERVES = poolInstance.functions.getReserves.__call__().call()
-    RESERVE0 = RESERVES[0]
-    RESERVE1 = RESERVES[1]
-    print(RESERVES)
+    RESERVE0 = "{:.3f}".format(Web3.fromWei(int(RESERVES[0]), "ether"))
+    RESERVE1 = "{:.3f}".format(Web3.fromWei(int(RESERVES[1]), "ether"))
+    # cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount) VALUES (?, ?, ?, ?, ?, ?)", (poolAddress, 2, str(TOKEN0), str(TOKEN1), RESERVE0, RESERVE1))
+    print("reserve0: ", RESERVE0)
+    print("reserve1: ", RESERVE1)
+    cur.execute("INSERT INTO pools (pool_address, token0_address, token1_address, token0_amount, token1_amount) VALUES (?, ?, ?, ?, ?)", (poolAddress, TOKEN0, TOKEN1, RESERVE0, RESERVE1))
+    
 
 def getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN):
     # get contract ABI from etherscan API using V2 address
