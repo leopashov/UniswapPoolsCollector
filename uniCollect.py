@@ -51,7 +51,7 @@ def getPoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     # cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount) VALUES (?, ?, ?, ?, ?, ?)", (poolAddress, 2, str(TOKEN0), str(TOKEN1), RESERVE0, RESERVE1))
     print("reserve0: ", RESERVE[0])
     print("reserve1: ", RESERVE[1])
-    cur.execute("INSERT INTO pools (pool_address, token0_address, token1_address, token0_amount, token1_amount, TVL_token0, TVL_token1) VALUES (?, ?, ?, ?, ?, ?, ?)", (poolAddress, TOKEN[0], TOKEN[1], RESERVE[0], RESERVE[1], TVL[0], TVL[1]))
+    cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (poolAddress, 2, TOKEN[0], TOKEN[1], RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
     
 
 def getTokenPrice(cg, contractAddress):
