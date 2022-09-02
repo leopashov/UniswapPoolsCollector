@@ -77,10 +77,10 @@ def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
             tokenABI = getABI(implementation_contract, ETHERSCAN_TOKEN)
         else:
             tokenABI = getABI(token, ETHERSCAN_TOKEN)
-        # use address and abi to call balance of function
-        poolInstance = w3.eth.contract(address = token, abi = tokenABI)
+        # use address and abi to call balance of function in token contract
+        tokenInstance = w3.eth.contract(address = token, abi = tokenABI)
         try:
-            call = poolInstance.functions.balanceOf(poolAddress).call()
+            call = tokenInstance.functions.balanceOf(poolAddress).call()
             RESERVE.append(call)
         except exceptions.ABIFunctionNotFound:
             RESERVE.append(0)
