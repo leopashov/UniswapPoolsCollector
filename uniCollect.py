@@ -6,9 +6,6 @@ import pandas as pd
 import sqlite3
 from pycoingecko import CoinGeckoAPI
 
-
-
-
 def main():
     load_dotenv()
     ETHERSCAN_TOKEN = os.getenv('ETHERSCAN_TOKEN')
@@ -19,12 +16,11 @@ def main():
     cur = con.cursor()
     cur.execute("DELETE FROM pools")
     cg = CoinGeckoAPI()
-    token0 = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
+    token0 = '0x6B175474E89094C44Da98b954EedeAC495271d0F'
     token1 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 
     getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
     con.commit()
-
     writeToCSV(cur)
 
 def writeToCSV(cur):
@@ -47,7 +43,7 @@ def writeToCSV(cur):
 
 def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
     V2Pools = getV2PairAddress(token0, token1, w3, UNI_FACTORY_V2, ETHERSCAN_TOKEN)
-    (V3Pools, bips) = getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
+    (V3Pools, bips) = getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN)
 
     getV2PoolData(V2Pools, w3, ETHERSCAN_TOKEN, cur, cg)
     getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg)
@@ -115,7 +111,7 @@ def getImplementationContract(proxyAddress, w3):
     return impl_contract
 
 
-def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg):
+def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN):
     bips = [100, 500, 3000, 10000]
     poolAddresses = []
     poolBips = []
