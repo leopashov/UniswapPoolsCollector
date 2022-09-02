@@ -16,7 +16,7 @@ def main():
     cur = con.cursor()
     cur.execute("DELETE FROM pools")
     cg = CoinGeckoAPI()
-    token0 = '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+    token0 = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
     token1 = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 
     getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN_TOKEN, cur, cg)
@@ -71,12 +71,8 @@ def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
     but gas is low at the moment so maybe rate of claiming is higher"""
     RESERVE = []
     for token in TOKEN:
-        implementation_contract = getImplementationContract(token, w3)
-        if int(implementation_contract, 16) != 0:
-            # token address is a proxy contract, use implementation address for ABI 
-            tokenABI = getABI(implementation_contract, ETHERSCAN_TOKEN)
-        else:
-            tokenABI = getABI(token, ETHERSCAN_TOKEN)
+        implementation_contract = getImplementationContractIfExists(token, w3)
+        tokenABI = getABI(implementation_contract, ETHERSCAN_TOKEN)
         # use address and abi to call balance of function in token contract
         tokenInstance = w3.eth.contract(address = token, abi = tokenABI)
         try:
@@ -90,7 +86,7 @@ def getReserve(TOKEN, poolAddress, ETHERSCAN_TOKEN, w3):
             print(f"Token uses non-EIP proxy: ", token)
     return RESERVE
 
-def getImplementationContract(proxyAddress, w3):
+def getImplementationContractIfExists(proxyAddress, w3):
     """reads proxy contract with address 'proxyAddress's storage at specific slot as defined in EIP 1967
     to obtain the implementation contract address."""
     impl_contract = Web3.toHex(
@@ -99,7 +95,10 @@ def getImplementationContract(proxyAddress, w3):
             "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
         )
     )
-    return impl_contract
+    if int(impl_contract, 16) != 0:
+        return impl_contract
+    else:
+        return proxyAddress
 
 
 def getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN):
@@ -135,13 +134,9 @@ def getV2PoolData(poolAddress, w3, ETHERSCAN_TOKEN, cur, cg):
     cur.execute("INSERT INTO pools (pool_address, uni_V_no, token0_address, token1_address, fee_tier, token0_amount, token1_amount, TVL_token0, TVL_token1, Token0_by_Token1, token0_usd_price, token1usd_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (poolAddress, 2, TOKEN[0], TOKEN[1], 3000, RESERVE[0], RESERVE[1], TVL[0], TVL[1], TOKEN0_by_TOKEN1, PRICE[0], PRICE[1]))
     
 def normalise_decimals(token_address, value, w3, etherscanToken):
-    implementationContract = getImplementationContract(token_address, w3)
-    if int(implementationContract, 16) != 0:
-        ABI = getABI(implementationContract, etherscanToken)
-        address = implementationContract
-    else:
-        ABI = getABI(token_address, etherscanToken)
-        address = token_address
+    implementationContract = getImplementationContractIfExists(token_address, w3)
+    ABI = getABI(implementationContract, etherscanToken)
+    address = implementationContract
     decimals = getDecimals(address, ABI, w3)
     value = value * pow(10,-decimals)
     value = float("{:.3f}".format(value))
@@ -177,7 +172,7 @@ def getABI(address, etherscanToken):
     if r.status_code == 200:
         return r.json()["result"]
     else:
-        print(f"API request status fault, response: ", r.json())
+        raise Exception(f"API request status fault, response: ", r.json())
 
 def init_connection():
     provider_url = "https://mainnet.infura.io/v3/d758f6f480b64b8daf47412f0969392b"
