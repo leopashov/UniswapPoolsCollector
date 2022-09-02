@@ -46,21 +46,12 @@ def getAllPoolInfo(token0, token1, w3, UNI_FACTORY_V2, UNI_FACTORY_V3, ETHERSCAN
     (V3Pools, bips) = getV3PairAddresses(token0, token1, w3, UNI_FACTORY_V3, ETHERSCAN_TOKEN)
 
     getV2PoolData(V2Pools, w3, ETHERSCAN_TOKEN, cur, cg)
-    getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg)
+    getV3PoolData(V3Pools, bips, token0, token1, w3, ETHERSCAN_TOKEN, cur, cg)
 
-def getV3PoolData(V3Pools, bips, w3, ETHERSCAN_TOKEN, cur, cg):
-    etherscan_verified_ABI_address = '0x8f8EF111B67C04Eb1641f5ff19EE54Cda062f163'
-    # use hardcoded address which etherscan seems to point to as the 
-    # verified version of later v3 pool implementations
-    poolABI = getABI(etherscan_verified_ABI_address, ETHERSCAN_TOKEN)
+def getV3PoolData(V3Pools, bips, token0, token1, w3, ETHERSCAN_TOKEN, cur, cg):
     count = 0
     for V3Pool in V3Pools:
-        poolInstance = w3.eth.contract(address = V3Pool, abi = poolABI)
-        try:
-            TOKEN = (poolInstance.functions.token0.__call__().call(), poolInstance.functions.token1.__call__().call())
-        except ValueError:
-            # value error raised when contract source not verified on etherscan
-            break
+        TOKEN = (token0, token1)
         RESERVE = getReserve(TOKEN, V3Pool, ETHERSCAN_TOKEN, w3)
         RESERVE[0] = normalise_decimals(TOKEN[0], RESERVE[0], w3, ETHERSCAN_TOKEN)
         RESERVE[1] = normalise_decimals(TOKEN[1], RESERVE[1], w3, ETHERSCAN_TOKEN)
